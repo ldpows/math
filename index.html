@@ -1,1 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PDF Whiteboard</title>
+  <style>
+    body{margin:0;font-family:system-ui;background:#111;color:#fff}
+    .bar{padding:12px 14px;background:#1b1b1b;border-bottom:1px solid #333}
+    .err{padding:14px;background:#2a0000;border-top:1px solid #5b0000;white-space:pre-wrap}
+    .stage{display:flex;justify-content:center;padding:12px}
+    .board{background:#fff;border-radius:16px;overflow:hidden;max-width:1200px;width:calc(100vw - 24px)}
+    canvas{display:block;width:100%;height:auto}
+  </style>
+</head>
+<body>
+  <div class="bar">
+    <strong>PDF Whiteboard</strong> — loading…
+    <div id="status" style="opacity:.85;margin-top:6px">Status: starting</div>
+  </div>
 
+  <div class="stage">
+    <div class="board">
+      <canvas id="pdfCanvas"></canvas>
+    </div>
+  </div>
+
+  <div id="error" class="err" style="display:none"></div>
+
+  <!-- IMPORTANT:
+       If ClassroomScreen blocks CDN, remove this and self-host pdf.min.js + pdf.worker.min.js in /lib (recommended).
+  -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.3.136/pdf.min.js"></script>
+
+  <script>
+    const statusEl = document.getElementById("status");
+    const errEl = document.getElementById("error");
+    function setStatus(s){ statusEl.textContent = "Status: " + s; }
+    function showErr(msg){
+      errEl.style.display = "block";
+      errEl.textContent = msg;
+    }
+
+    (async function(){
+      try{
+        setStatus("checking pdf.js");
+        const pdfjsLib = window['pdfjs-dist/build/pdf'];
+        if(!pdfjsLib){
+          throw new Error("pdf.js did not load. If you're in ClassroomScreen, it may block cdnjs. Self-host pdf.min.js and pdf.worker.min.js.");
+        }
+
+        pdfjsLib.GlobalWorkerOptions.workerSrc =
+          "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.3.136/pdf.worker.min.js";
+
+        // rename your PDF to lesson.pdf and keep it beside index.html
+        const PDF_FILE = "./lesson.pdf";
+
+        setStatus("loading PDF: " + PDF_FILE);
+        const pdfDoc = await pdfjsLib.getDocument(PDF_FILE).promise;
+
+        setStatus("rendering page 1 of " + pdfDoc.numPages);
+        const page = await pdfDoc.getPage(1);
+
+        const canvas = document.getElementById("pdfCanvas");
+        const ctx = canvas.getContext("2d");
+
+        const viewport = page.getViewport({ scale: 1.5 });
+        canvas.width = Math.floor(viewport.width);
+        canvas.height = Math.floor(viewport.height);
+
+        await page.render({ canvasContext: ctx, viewport }).promise;
+
+        setStatus("done ✅");
+      }catch(e){
+        setStatus("failed ❌");
+        showErr(
+          "It failed with this error:\n\n" + (e && e.message ? e.message : String(e)) +
+          "\n\nMost common fixes:\n" +
+          "1) Don't open as file:// — use GitHub Pages or http://localhost.\n" +
+          "2) ClassroomScreen may block cdnjs — self-host pdf.min.js + pdf.worker.min.js.\n" +
+          "3) Make sure lesson.pdf exists in the same folder and the name matches exactly."
+        );
+        console.error(e);
+      }
+    })();
+  </script>
+</body>
+</html>
